@@ -1,0 +1,267 @@
+---
+title: "2013-2022 EPL Season Analysis"
+author: "Odinakachukwu Egwuekwe ,"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r,include=FALSE}
+## Libraries
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(ggplot2)
+```
+# Objective:
+
+This analysis delves into English Premier League statistics from 2013 to 2022, aiming to uncover trends over the past decade and discern possible potential implications for the future.
+## Query used on the Dataset
+
+#### This query calculates the number of away wins, home wins, draws and Win Ratio for each season in the English Premier League dataset
+
+    SELECT
+      *,
+      Round(((No_of_Away_Wins+No_of_Home_Wins)/380)*100,1) as Win_Ratio
+
+    FROM(
+      SELECT 
+        Season,
+        COUNTIF(Result_FullTime="A") AS No_of_Away_Wins,
+        COUNTIF(Result_FullTime="H") AS No_of_Home_Wins,
+        COUNTIF(Result_FullTime="D") As No_of_Draws
+ 
+      FROM 
+        `sonic-falcon-404009.EPL_STATS.match_stats` 
+      WHERE
+        Result_FullTime IN ("A", "H","D")
+      GROUP BY
+          Season
+    );
+    
+#### This query retrieves Home statistics about the top six football clubs (Manchester United, Manchester City, Chelsea, Liverpool, Arsenal, and Tottenham) in the English Premier League. 
+
+    WITH Big_Six_Clubs AS (
+    
+        SELECT 
+          Season,
+          Month,
+          Home_Team,
+          Away_Team,
+          AwayGoals_FullTime,
+          Result_FullTime
+
+        FROM 
+          `sonic-falcon-404009.EPL_STATS.match_stats` 
+  
+        WHERE
+          Home_Team IN ("Man United","Man City","Chelsea","Liverpool","Arsenal","Tottenham")
+      )
+
+    SELECT
+       Season,
+       SUM(AwayGoals_FullTime) as Goals_conceeded,
+       COUNTIF(Result_FullTime='A') AS Home_losses
+  
+    FROM 
+       Big_Six_Clubs
+
+    WHERE
+      Away_Team != Home_Team
+
+    GROUP BY
+      Season;
+
+#### This query aggregates statistics for each season in the English Premier League, including total home goals, total away goals, total yellow cards, total red cards, total goals, average away goals, average home goals, and average goals (both home and away)
+
+    SELECT
+      Season,
+      SUM(HomeCard_Yellow+AwayCard_Yellow) as No_of_Yellow_Cards,
+      SUM(HomeCard_Red+AwayCard_Red) as No_of_Red_Cards,
+      Round(AVG(AwayGoals_FullTime),1) as Average_Awaygoal,
+      Round(AVG(HomeGoals_FullTime),1) as Average_Homegoal,
+      Round(AVG(HomeGoals_FullTime+AwayGoals_FullTime),1) as Average_Goals
+
+    FROM 
+      `sonic-falcon-404009.EPL_STATS.match_stats` 
+
+    GROUP BY
+       Season;
+       
+#### This query retrieves Home statistics about the Football clubs outside top six football teams (Manchester United, Manchester City, Chelsea, Liverpool, Arsenal, and Tottenham) in the English Premier League. 
+
+    WITH Lower_Clubs AS (
+
+       SELECT 
+          Season,
+          Month,
+          Home_Team,
+          Away_Team,
+          HomeGoals_FullTime,
+          AwayGoals_FullTime,
+          Result_FullTime
+
+
+      FROM 
+         `sonic-falcon-404009.EPL_STATS.match_stats` 
+  
+      WHERE
+         Home_Team NOT IN ("Man United","Man City","Chelsea","Liverpool","Arsenal","Tottenham")
+  
+      )
+
+      SELECT
+        Season,
+        SUM(HomeGoals_FullTime) as Goals_Scored,
+        SUM(AwayGoals_FullTime) as Goals_conceeded,
+        COUNTIF(Result_FullTime='H') AS Home_Wins,
+        COUNTIF(Result_FullTime='D') AS Home_Draws,
+        COUNTIF(Result_FullTime='A') AS Home_Loss
+
+
+
+      FROM 
+        Lower_Clubs
+
+      WHERE
+        Away_Team != Home_Team
+
+     GROUP BY
+        Season
+      ;
+        
+```{r,echo=FALSE}
+# Set the path 
+folder_path <- getwd()
+
+# file list in the folder
+file_list <- list.files(path = folder_path, pattern = "\\.csv$", full.names = TRUE)
+
+# empty list to store the data frames
+data_frames <- list()
+
+# Loop through each file and read it into a data frame
+for (file in file_list) {
+  data_frames[[file]] <- read.csv(file)
+}
+
+
+```
+
+
+## Goal stats
+```{r,echo=FALSE}
+#Transforming the dataframe to a longer format
+goal_stats<- data_frames[[5]] %>%
+  pivot_longer(cols=-Season,names_to ="Column", values_to = "Value")
+
+# filtering the new dataframe based on two column values
+ goal_stats %>%
+  filter(Column %in% c("Average_Awaygoal","Average_Homegoal"))%>%
+  ggplot(aes(x=Season,y=Value,group=1))+
+  geom_point()+
+  geom_line()+
+  labs(title="Average goals per season", subtitle="Trends over time",ylab="Average Goal")+
+  facet_wrap(~Column,ncol=2)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+```
+
+- *The 2020/2021* season is characterized by an almost equal average of goals per match for both away and home teams. This balance in scoring suggests a season where teams exhibited comparable offensive strength, resulting in a closely contested competition with similar goal-scoring performances whether playing at home or away. This equilibrium suggests a season characterized by balanced competition, where teams displayed comparable proficiency in scoring both at home and on the road.
+
+
+## Win Stats
+
+### Overall Win stats per season
+```{r,echo=FALSE}
+#Transforming the dataframe to a longer format
+Win_stats<-data_frames[[7]] %>%
+  pivot_longer(cols=-Season,names_to="Column",values_to = "Value")
+```
+
+
+```{r,echo=FALSE}
+Win_stats %>%
+    filter(Column %in% c("No_of_Away_Wins","No_of_Home_Wins"))%>%
+    ggplot(aes(x=Season,y=Value,group=1))+
+    geom_point()+
+    geom_line()+
+    labs(title="No of wins per season",subtitle = "Home and Away")+
+    facet_wrap(~Column)+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+- Traditionally, Home Wins have consistently outnumbered Away Wins in most seasons, underscoring the influence of home-field advantage. However, the *2020/2021* season presented a noteworthy departure, with more Away Wins than Home Wins. This departure could be attributed to matches played amidst Covid-19 restrictions, leading to minimal or zero stadium capacity. This stark contrast highlights the pivotal role supporters play in a stadium, as their absence potentially disrupts the usual dynamics and impacts match outcomes. It reinforces the significance of fans in creating an electrifying atmosphere and influencing team performance, showcasing the irreplaceable connection between supporters and the vibrancy of the game.
+
+
+
+```{r,include=FALSE}
+#Plot Function
+plot <- function(i,variable, Title) {
+  ggplot(data = data_frames[[i]]) +
+    geom_line(aes(x = Season, y = !!sym(variable), group = 1)) +
+    geom_point(aes(x = Season, y = !!sym(variable), group = 1)) +
+    labs(title = Title,subtitle = "Per Season" , ylab = paste0(variable)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+```
+
+### Win Ratio
+```{r,echo=FALSE}
+plot(7,"Win_Ratio", "Win Ratio")
+```
+
+- In the dynamic landscape of the English Premier League, the win ratio has exhibited notable fluctuations over the years. During the *2015/2016* season, the win ratio reached its lowest point, approximately *72%*. However, a significant surge was witnessed in the *2018/2019* season, marking its peak at *81%*. Since then, the win ratio has demonstrated commendable stability, maintaining an average of *77%* across subsequent seasons. These variations highlight the competitive nature of the league and the ability of teams to adapt and perform consistently over time.
+
+
+## Performance against the Big six teams
+```{r,echo=FALSE}
+ggplot(data=data_frames[[3]])+
+  geom_bar(stat="identity",position="dodge",aes(x=Big_Six,y=Goals_conceeded,fill=Big_Six))+
+  labs(title ="Home Goals Conceeded by Big Six teams", subtitle= "Against Lower 14 Clubs")+
+  facet_wrap(~Season,ncol=5)+
+  theme(axis.text.x = element_text(angle = 80, hjust = 1))
+
+```
+
+### Away performance Against the Big Six Clubs
+```{r,echo=FALSE}
+plot(4,"Goals_conceeded", "Total away goals scored VS the  Big Six Clubs ")
+plot(4,"Home_losses", "Total Away wins VS the Big Six Clubs")
+
+```
+
+- The upward trajectory in the number of goals scored against the top six clubs by the lower 14 teams since the 2017/2018 season suggests a progressively more proactive approach against formidable opponents. This trend signals a narrowing gap between the traditionally dominant top six clubs and the rest, reflecting a shift in the dynamics of competition.
+
+- Notably, starting from the 2016/2017 season, there is a discernible upward trend in the number of home losses by the top six teams, reaching its zenith during the 2020/2021 season. This pattern underscores the evolving landscape of football dynamics, indicating increased competitiveness and unpredictability even among the historically stronger sides.
+
+### Home performance Against the Big Six Clubs
+```{r,echo=FALSE}
+lower_clubs<- data_frames[[6]]%>%
+  pivot_longer(cols=-Season, names_to = "Stats", values_to = "Value")
+```
+
+```{r,echo=FALSE}
+lower_clubs%>%
+  filter(Stats %in% c("Home_Wins","Home_Draws","Home_Loss"))%>%
+  ggplot(aes(x=Season, y= Value, group=1))+
+  geom_point(aes(x=Season, y= Value))+
+  geom_line(aes(x=Season, y= Value))+
+  labs(title = "Home Performance VS the Big Six Clubs") +
+  facet_wrap(~Stats)+
+  theme(axis.text.x = element_text(angle = 80, hjust = 1))
+
+
+```
+
+- Conversely, a discernible negative trend has been evident in the home performance of lower-ranked clubs against the big six teams, particularly in terms of home wins. However, a notable shift occurred starting from the 2020/2021 season, revealing a marked upward trend. This improvement  as evident in the current season signifies a potential spark and resilience among the lower-ranked clubs, showcasing their improved ability to compete more effectively against the traditionally dominant big six teams. The evolving dynamics underscore the ever-changing landscape of football, where unexpected turns and improvements can reshape the narrative of competition.
+
